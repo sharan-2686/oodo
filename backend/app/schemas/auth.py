@@ -66,3 +66,29 @@ class UserCreateRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=160)
     role_id: int
 
+
+class CustomerSignUpRequest(BaseModel):
+    """Payload for self-service customer registration."""
+    email: EmailStr
+    password: str = Field(..., min_length=6, description="Account password (min 6 chars)")
+    full_name: str = Field(..., min_length=2, max_length=160)
+    customer_type: str = Field(default="individual", description="'individual' or 'business'")
+    phone: Optional[str] = None
+    company_name: Optional[str] = None
+    tax_identifier: Optional[str] = None
+    billing_address_line1: Optional[str] = None
+    billing_address_line2: Optional[str] = None
+    billing_city: Optional[str] = None
+    billing_state: Optional[str] = None
+    billing_postal_code: Optional[str] = None
+    billing_country: Optional[str] = "IN"
+
+
+class StaffSignUpRequest(BaseModel):
+    """Payload for internal staff self-registration (excluding admin)."""
+    email: EmailStr
+    password: str = Field(..., min_length=6, description="Account password (min 6 chars)")
+    full_name: str = Field(..., min_length=2, max_length=160)
+    role: str = Field(default="staff", description="Assigned staff role: staff, sales, finance, support")
+
+

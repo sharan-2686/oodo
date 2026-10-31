@@ -160,6 +160,23 @@ class Invoice(Base):
     )
     billing_run = relationship("BillingRun", back_populates="invoice", uselist=False)
 
+    @property
+    def amount_paid(self) -> Decimal:
+        allocs = self.payment_allocations
+        if not allocs:
+            return Decimal("0.00")
+        return sum((a.amount_allocated for a in allocs), Decimal("0.00"))
+
+    @property
+    def balance_due(self) -> Decimal:
+        total = self.total_amount if self.total_amount is not None else Decimal("0.00")
+        return max(Decimal("0.00"), total - self.amount_paid)
+
+    @property
+    def allocations(self):
+        return self.payment_allocations
+
+
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
@@ -281,6 +298,18 @@ class Payment(Base):
     allocations: Mapped[List["PaymentAllocation"]] = relationship(
         "PaymentAllocation", back_populates="payment", cascade="all, delete-orphan"
     )
+
+    @property
+    def total_allocated(self) -> Decimal:
+        if not self.allocations:
+            return Decimal("0.00")
+        return sum((a.amount_allocated for a in self.allocations), Decimal("0.00"))
+
+    @property
+    def unallocated_amount(self) -> Decimal:
+        amt = self.amount if self.amount is not None else Decimal("0.00")
+        return max(Decimal("0.00"), amt - self.total_allocated)
+
 
 
 class PaymentAllocation(Base):

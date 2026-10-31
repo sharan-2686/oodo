@@ -45,6 +45,7 @@ class Base(DeclarativeBase):
 BigIntPK = BigInteger().with_variant(
     MYSQL_BIGINT(unsigned=True), "mysql"
 ).with_variant(Integer, "sqlite")
+PK_BIGINT = BigIntPK
 
 BigIntFK = BigInteger().with_variant(
     MYSQL_BIGINT(unsigned=True), "mysql"

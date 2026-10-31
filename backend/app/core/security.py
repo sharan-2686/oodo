@@ -9,17 +9,43 @@ from pwdlib import PasswordHash
 from app.core.config import settings
 
 # Initialize password hasher using argon2id via pwdlib
-password_hash_context = PasswordHash.recommended()
+try:
+    password_hash_context = PasswordHash.recommended()
+except Exception:
+    password_hash_context = None
+
+try:
+    import argon2
+    _argon2_hasher = argon2.PasswordHasher()
+except Exception:
+    _argon2_hasher = None
 
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password using Argon2id."""
-    return password_hash_context.hash(password)
+    if password_hash_context:
+        try:
+            return password_hash_context.hash(password)
+        except TypeError:
+            pass
+    if _argon2_hasher:
+        return _argon2_hasher.hash(password)
+    raise RuntimeError("No argon2 password hasher available")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against an Argon2id hash."""
-    return password_hash_context.verify(plain_password, hashed_password)
+    if password_hash_context:
+        try:
+            return password_hash_context.verify(plain_password, hashed_password)
+        except Exception:
+            pass
+    if _argon2_hasher:
+        try:
+            return _argon2_hasher.verify(hashed_password, plain_password)
+        except Exception:
+            return False
+    return False
 
 
 def create_access_token(

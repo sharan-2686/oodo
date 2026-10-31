@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import List, Set
+from typing import List, Optional, Set
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 import jwt
@@ -85,6 +85,32 @@ def get_current_active_user(
     return current_user
 
 
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Optional authentication dependency: returns User if valid token present, else None."""
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        subject = payload.get("sub")
+        if not subject:
+            return None
+        user_id = int(subject)
+        stmt = (
+            select(User)
+            .options(selectinload(User.role).selectinload(Role.permissions))
+            .where(User.id == user_id)
+        )
+        user = db.scalar(stmt)
+        if user and user.is_active:
+            return user
+        return None
+    except Exception:
+        return None
+
+
 def require_role(*role_names: str) -> Callable[[User], User]:
     """Dependency factory that verifies the user has one of the specified roles.
     
@@ -149,4 +175,34 @@ def require_permission(*permission_codes: str, require_all: bool = False) -> Cal
         return current_user
 
     return permission_checker
+
+
+def require_admin(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+) -> Optional[User]:
+    """Ensure that when authenticated, the caller must have the Administrator role."""
+    if current_user is not None:
+        role_name = current_user.role.name.strip().lower() if current_user.role else ""
+        if role_name != "admin":
+            raise ForbiddenError(
+                message="Administrator privileges required for this operation",
+                code="ADMIN_REQUIRED",
+            )
+    return current_user
+
+
+def require_staff_or_admin(
+    current_user: Optional[User] = Depends(get_optional_current_user),
+) -> Optional[User]:
+    """Ensure that when authenticated, the caller must be internal staff or administrator (excludes customer)."""
+    if current_user is not None:
+        role_name = current_user.role.name.strip().lower() if current_user.role else ""
+        if role_name not in ["admin", "staff", "sales", "finance", "support"]:
+            raise ForbiddenError(
+                message="Internal staff or administrator privileges required",
+                code="STAFF_REQUIRED",
+            )
+    return current_user
+
+
 

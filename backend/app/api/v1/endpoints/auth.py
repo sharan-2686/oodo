@@ -5,8 +5,10 @@ from app.core.database import get_db
 from app.core.permissions import get_current_active_user
 from app.models.user import User
 from app.schemas.auth import (
+    CustomerSignUpRequest,
     LoginRequest,
     RefreshTokenRequest,
+    StaffSignUpRequest,
     TokenResponse,
     UserResponse,
 )
@@ -15,10 +17,59 @@ from app.services.auth_service import (
     build_user_response,
     create_user_session,
     refresh_user_session,
+    register_customer,
+    register_staff,
     revoke_user_token,
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post(
+    "/signup/customer",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register a new customer account and customer profile",
+)
+@router.post(
+    "/signup",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+def signup_customer(
+    payload: CustomerSignUpRequest, db: Session = Depends(get_db)
+) -> TokenResponse:
+    """Register customer account, create customer profile, and return active session tokens."""
+    access_token, refresh_token, expires_in, user = register_customer(db, payload)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=build_user_response(user),
+    )
+
+
+@router.post(
+    "/signup/staff",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Register an internal staff member (admin prohibited)",
+)
+def signup_staff(
+    payload: StaffSignUpRequest, db: Session = Depends(get_db)
+) -> TokenResponse:
+    """Register staff account with specified staff role (sales, finance, support) and return session tokens."""
+    access_token, refresh_token, expires_in, user = register_staff(db, payload)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=build_user_response(user),
+    )
+
 
 
 @router.post(
