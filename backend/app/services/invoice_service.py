@@ -227,7 +227,7 @@ class InvoiceService:
             currency=data.currency,
             issue_date=issue_date,
             due_date=due_date,
-            customer_name_snapshot=customer.name,
+            customer_name_snapshot=customer.name or customer.company_name or f"Customer #{customer.id}",
             customer_email_snapshot=customer.email,
             billing_address_snapshot=address_snapshot,
             notes=data.notes,

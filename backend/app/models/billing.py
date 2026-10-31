@@ -238,9 +238,6 @@ class InvoiceItem(Base):
     line_total: Mapped[Decimal] = mapped_column(
         MoneyAmount, default=Decimal("0.00"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime, default=get_utc_now, nullable=False
-    )
 
     # Relationships
     invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="items")
@@ -283,6 +280,9 @@ class Payment(Base):
     idempotency_key: Mapped[str | None] = mapped_column(
         String(100), unique=True, nullable=True, index=True
     )
+    razorpay_order_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    razorpay_payment_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[int | None] = mapped_column(

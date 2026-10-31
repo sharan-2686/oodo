@@ -12,7 +12,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { formatCurrency, formatDate, getStatusBadgeVariant } from '../utils/formatters';
-import { Plus, Eye, CheckCircle, Ban, Printer } from 'lucide-react';
+import { Plus, Eye, CheckCircle, Ban, Printer, Trash2 } from 'lucide-react';
 
 export const InvoicesPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -34,10 +34,21 @@ export const InvoicesPage: React.FC = () => {
   // Create One-Time Form State
   const [customerId, setCustomerId] = useState<number | undefined>(undefined);
   const [notes, setNotes] = useState('Payment terms: Net 15 days from invoice issuance.');
-  const [items, setItems] = useState([
+  const [items, setItems] = useState<Array<{
+    description_snapshot: string;
+    quantity: number;
+    unit_price: number;
+    tax_rate_percent: number;
+  }>>([
     { description_snapshot: 'Professional Services / Setup Fee', quantity: 1, unit_price: 15000, tax_rate_percent: 18 },
   ]);
   const [formError, setFormError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!customerId && customerList?.items?.length) {
+      setCustomerId(customerList.items[0].id);
+    }
+  }, [customerList, customerId]);
 
   // Mutations
   const createMutation = useMutation({
@@ -45,9 +56,16 @@ export const InvoicesPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setIsCreateModalOpen(false);
+      resetCreateForm();
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.detail || 'Failed to create invoice');
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+        ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ')
+        : 'Failed to create invoice';
+      setFormError(msg);
     },
   });
 
@@ -58,9 +76,36 @@ export const InvoicesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.detail || 'Action failed');
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+        ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ')
+        : 'Action failed';
+      alert(msg);
     },
   });
+
+  const resetCreateForm = () => {
+    setCustomerId(customerList?.items?.[0]?.id);
+    setNotes('Payment terms: Net 15 days from invoice issuance.');
+    setItems([
+      { description_snapshot: 'Professional Services / Setup Fee', quantity: 1, unit_price: 15000, tax_rate_percent: 18 },
+    ]);
+    setFormError(null);
+  };
+
+  const handleAddItem = () => {
+    setItems([
+      ...items,
+      { description_snapshot: 'Additional Service / Deliverable', quantity: 1, unit_price: 5000, tax_rate_percent: 18 },
+    ]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (items.length <= 1) return;
+    setItems(items.filter((_, i) => i !== index));
+  };
 
   const handleCreateInvoice = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +124,11 @@ export const InvoicesPage: React.FC = () => {
     window.print();
   };
 
+  // Live Calculations for Modal
+  const calculatedSubtotal = items.reduce((acc, it) => acc + (it.quantity * it.unit_price), 0);
+  const calculatedTax = items.reduce((acc, it) => acc + (it.quantity * it.unit_price * (it.tax_rate_percent / 100)), 0);
+  const calculatedTotal = calculatedSubtotal + calculatedTax;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -94,7 +144,7 @@ export const InvoicesPage: React.FC = () => {
         <Button
           variant="primary"
           onClick={() => {
-            if (customerList?.items?.length) setCustomerId(customerList.items[0].id);
+            resetCreateForm();
             setIsCreateModalOpen(true);
           }}
         >
@@ -111,7 +161,10 @@ export const InvoicesPage: React.FC = () => {
           title="No invoices generated"
           description="Invoices are created automatically when subscriptions bill, or you can draft a one-time invoice."
           actionLabel="Create Invoice"
-          onAction={() => setIsCreateModalOpen(true)}
+          onAction={() => {
+            resetCreateForm();
+            setIsCreateModalOpen(true);
+          }}
         />
       ) : (
         <Table>
@@ -351,42 +404,129 @@ export const InvoicesPage: React.FC = () => {
             label="Customer Account"
             value={customerId || ''}
             onChange={(e) => setCustomerId(Number(e.target.value))}
-            options={(customerList?.items || []).map((c) => ({
-              value: c.id,
-              label: `${c.name} (${c.customer_code})`,
-            }))}
+            options={[
+              { value: '', label: '-- Select Customer Account --' },
+              ...(customerList?.items || []).map((c) => ({
+                value: c.id,
+                label: `${c.name} (${c.customer_code})`,
+              })),
+            ]}
             required
           />
 
-          <div className="p-3.5 rounded-xl bg-[#F2EDE6] border border-[#E2D9D0] space-y-3">
-            <span className="text-xs font-semibold text-[#1C1410]">Deliverable Line Item</span>
-            <Input
-              label="Description"
-              value={items[0].description_snapshot}
-              onChange={(e) => setItems([{ ...items[0], description_snapshot: e.target.value }])}
-              required
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Amount (INR)"
-                type="number"
-                min="0"
-                step="0.01"
-                value={items[0].unit_price}
-                onChange={(e) => setItems([{ ...items[0], unit_price: parseFloat(e.target.value) || 0 }])}
-                required
-              />
-              <Input
-                label="Tax Rate (GST %)"
-                type="number"
-                value={items[0].tax_rate_percent}
-                onChange={(e) => setItems([{ ...items[0], tax_rate_percent: parseFloat(e.target.value) || 0 }])}
-              />
+          {/* Dynamic Line Items */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[#1C1410] uppercase tracking-wider">
+                Invoice Line Items
+              </span>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleAddItem}
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Add Row
+              </Button>
+            </div>
+
+            <div className="space-y-2.5">
+              {items.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="grid grid-cols-12 gap-2 p-3 rounded-xl bg-[#F2EDE6] border border-[#E2D9D0] items-center"
+                >
+                  <div className="col-span-5">
+                    <Input
+                      placeholder="Description / Deliverable"
+                      value={item.description_snapshot}
+                      onChange={(e) => {
+                        const updated = [...items];
+                        updated[idx].description_snapshot = e.target.value;
+                        setItems(updated);
+                      }}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      placeholder="Qty"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const updated = [...items];
+                        updated[idx].quantity = Number(e.target.value) || 1;
+                        setItems(updated);
+                      }}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Price"
+                      value={item.unit_price}
+                      onChange={(e) => {
+                        const updated = [...items];
+                        updated[idx].unit_price = parseFloat(e.target.value) || 0;
+                        setItems(updated);
+                      }}
+                      required
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      placeholder="GST %"
+                      value={item.tax_rate_percent}
+                      onChange={(e) => {
+                        const updated = [...items];
+                        updated[idx].tax_rate_percent = parseFloat(e.target.value) || 0;
+                        setItems(updated);
+                      }}
+                    />
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(idx)}
+                        className="text-[#8B1A1A] hover:bg-[#FFE5E5] p-1.5 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Live Summary */}
+          <div className="p-3.5 rounded-xl bg-[#FAF7F2] border border-[#E2D9D0] space-y-1.5 text-xs">
+            <div className="flex justify-between text-[#7A6860]">
+              <span>Subtotal:</span>
+              <span className="font-mono text-[#1C1410] font-semibold">{formatCurrency(calculatedSubtotal)}</span>
+            </div>
+            <div className="flex justify-between text-[#7A6860]">
+              <span>Estimated Tax (GST):</span>
+              <span className="font-mono text-[#1C1410] font-semibold">{formatCurrency(calculatedTax)}</span>
+            </div>
+            <div className="flex justify-between text-sm font-bold text-[#1C1410] pt-1.5 border-t border-[#E2D9D0]">
+              <span>Invoice Total:</span>
+              <span className="font-mono text-[#6B1A2A]">{formatCurrency(calculatedTotal)}</span>
             </div>
           </div>
 
           <Input
-            label="Invoice Notes"
+            label="Invoice Notes & Payment Terms"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />

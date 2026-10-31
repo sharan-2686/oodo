@@ -43,7 +43,12 @@ class QuotationService:
     @staticmethod
     def create_quotation(db: Session, data: QuotationCreate, user_id: Optional[int] = None) -> Quotation:
         if not data.customer_id and user_id:
-            cust = db.query(Customer).filter((Customer.created_by == user_id)).first()
+            from app.models.user import User
+            user_obj = db.query(User).filter(User.id == user_id).first()
+            user_email = user_obj.email if user_obj else None
+            cust = db.query(Customer).filter(
+                (Customer.created_by == user_id) | (Customer.email == user_email)
+            ).first()
             if cust:
                 data.customer_id = cust.id
 

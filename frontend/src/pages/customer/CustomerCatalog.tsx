@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ShoppingBag, Search, Package, Loader2 } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { ShoppingBag, Search, Package, Loader2, FileText } from 'lucide-react';
 import { catalogApi } from '../../api/catalog';
-import { Product } from '../../types';
+import { quotationsApi } from '../../api/quotations';
+import { Product, QuotationCreateInput } from '../../types';
 
 const formatCurrency = (val: number | string): string => {
   const num = parseFloat(String(val));
@@ -11,12 +13,30 @@ const formatCurrency = (val: number | string): string => {
 };
 
 const CustomerCatalog: React.FC = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['customer-products', search, category],
     queryFn: () => catalogApi.listProducts({ category: category || undefined }),
+  });
+
+  const quoteMutation = useMutation({
+    mutationFn: (data: QuotationCreateInput) => quotationsApi.create(data),
+    onSuccess: (quote) => {
+      alert(`Quote ${quote.quote_number} generated successfully!`);
+      navigate('/customer/quotations');
+    },
+    onError: (err: any) => {
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+        ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ')
+        : 'Failed to request quote';
+      alert(msg);
+    },
   });
 
   const categories = [...new Set(products.map((p) => p.category).filter(Boolean))] as string[];
@@ -104,19 +124,45 @@ const CustomerCatalog: React.FC = () => {
                     {product.variants.filter((v) => v.is_active).map((variant) => (
                       <div
                         key={variant.id}
-                        className="flex items-center justify-between p-3 rounded-lg"
+                        className="p-3 rounded-lg flex flex-col gap-2"
                         style={{ background: '#FAF7F2', border: '1px solid #E2D9D0' }}
                       >
-                        <div>
-                          <p className="text-sm font-medium text-ink">{variant.name}</p>
-                          <p className="text-xs text-muted">{variant.sku}</p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-ink">{variant.name}</p>
+                            <p className="text-xs text-muted">{variant.sku}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-primary text-sm">
+                              {formatCurrency(variant.unit_price)}
+                            </p>
+                            <p className="text-xs text-muted">{variant.currency || 'INR'}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-primary text-sm">
-                            {formatCurrency(variant.unit_price)}
-                          </p>
-                          <p className="text-xs text-muted">{variant.currency || 'INR'}</p>
-                        </div>
+                        <button
+                          type="button"
+                          disabled={quoteMutation.isPending}
+                          onClick={() => {
+                            quoteMutation.mutate({
+                              currency: variant.currency || 'INR',
+                              terms: 'Payment due within 15 days upon acceptance.',
+                              items: [
+                                {
+                                  product_id: product.id,
+                                  variant_id: variant.id,
+                                  description: `${product.name} (${variant.name})`,
+                                  quantity: 1,
+                                  unit_price: Number(variant.unit_price) || 0,
+                                  tax_rate_percent: 18,
+                                },
+                              ],
+                            });
+                          }}
+                          className="w-full py-1.5 px-3 rounded-lg bg-[#6B1A2A] text-white text-xs font-semibold hover:bg-[#521320] transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <FileText size={12} />
+                          Request Quotation
+                        </button>
                       </div>
                     ))}
                   </div>

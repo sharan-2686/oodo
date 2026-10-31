@@ -1,6 +1,6 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, Loader2, Calendar, Clock } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { FileText, Loader2, Calendar, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { quotationsApi } from '../../api/quotations';
 import { Quotation } from '../../types';
 
@@ -20,10 +20,23 @@ const statusStyles: Record<string, string> = {
 };
 
 const CustomerQuotations: React.FC = () => {
+  const queryClient = useQueryClient();
+
   const { data: quotations = [], isLoading } = useQuery<Quotation[]>({
     queryKey: ['customer-quotations'],
     queryFn: () => quotationsApi.list({ }),
     select: (data) => (Array.isArray(data) ? data : (data as any).items ?? []),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      quotationsApi.updateStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-quotations'] });
+    },
+    onError: (err: any) => {
+      alert(err.response?.data?.detail || 'Failed to update quotation');
+    },
   });
 
   return (
@@ -91,6 +104,30 @@ const CustomerQuotations: React.FC = () => {
                         <p className="text-xs text-muted">+{q.items.length - 3} more items</p>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* Accept / Decline actions for Customer */}
+                {['draft', 'sent'].includes(q.status) && (
+                  <div className="mt-4 pt-3 flex justify-end gap-2" style={{ borderTop: '1px solid #E2D9D0' }}>
+                    <button
+                      type="button"
+                      disabled={statusMutation.isPending}
+                      onClick={() => statusMutation.mutate({ id: q.id, status: 'rejected' })}
+                      className="px-3 py-1.5 rounded-lg border border-[#FFC9C9] text-xs font-semibold text-[#8B1A1A] hover:bg-[#FFE5E5] transition-colors flex items-center gap-1.5"
+                    >
+                      <XCircle size={13} />
+                      Decline
+                    </button>
+                    <button
+                      type="button"
+                      disabled={statusMutation.isPending}
+                      onClick={() => statusMutation.mutate({ id: q.id, status: 'accepted' })}
+                      className="px-3 py-1.5 rounded-lg bg-[#2D6A4F] text-xs font-semibold text-white hover:bg-[#23533E] transition-colors flex items-center gap-1.5 shadow-sm"
+                    >
+                      <CheckCircle size={13} />
+                      Accept Quote
+                    </button>
                   </div>
                 )}
               </div>

@@ -54,6 +54,12 @@ export const QuotationsPage: React.FC = () => {
   ]);
   const [formError, setFormError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (!customerId && customerList?.items?.length) {
+      setCustomerId(customerList.items[0].id);
+    }
+  }, [customerList, customerId]);
+
   // Convert Form State
   const [convertPlanId, setConvertPlanId] = useState<number | undefined>(undefined);
   const [convertBillingInterval, setConvertBillingInterval] = useState<'month' | 'year' | 'week' | 'day'>('month');
@@ -67,7 +73,13 @@ export const QuotationsPage: React.FC = () => {
       resetCreateForm();
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.detail || 'Failed to create quotation');
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+        ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ')
+        : 'Failed to create quotation';
+      setFormError(msg);
     },
   });
 
@@ -89,12 +101,18 @@ export const QuotationsPage: React.FC = () => {
       navigate('/staff/subscriptions');
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.detail || 'Failed to convert quotation');
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+        ? detail.map((d: any) => d.msg || JSON.stringify(d)).join(', ')
+        : 'Failed to convert quotation';
+      setFormError(msg);
     },
   });
 
   const resetCreateForm = () => {
-    setCustomerId(undefined);
+    setCustomerId(customerList?.items?.[0]?.id);
     setItems([{ description: 'Cloud Platform Subscription (Standard)', quantity: 1, unit_price: 4999, tax_rate_percent: 18 }]);
     setFormError(null);
   };
@@ -377,10 +395,13 @@ export const QuotationsPage: React.FC = () => {
               label="Customer Account"
               value={customerId || ''}
               onChange={(e) => setCustomerId(Number(e.target.value))}
-              options={(customerList?.items || []).map((c) => ({
-                value: c.id,
-                label: `${c.name} (${c.customer_code})`,
-              }))}
+              options={[
+                { value: '', label: '-- Select Customer Account --' },
+                ...(customerList?.items || []).map((c) => ({
+                  value: c.id,
+                  label: `${c.name} (${c.customer_code})`,
+                })),
+              ]}
               required
             />
             <Input

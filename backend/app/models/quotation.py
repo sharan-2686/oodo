@@ -155,9 +155,6 @@ class QuotationItem(Base):
     line_total: Mapped[Decimal] = mapped_column(
         MoneyAmount, default=Decimal("0.00"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime, default=get_utc_now, nullable=False
-    )
 
     # Relationships
     quotation: Mapped["Quotation"] = relationship("Quotation", back_populates="items")
